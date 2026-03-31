@@ -1,0 +1,69 @@
+name: Build Static catdoc
+
+# 触发条件：当你推送一个标签（如 v1.0）时，或者手动触发
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  # 方案一：在原生 ARM64 环境中编译（最稳妥）
+  build-arm64-native:
+    name: Build for ARM64 (Native)
+    runs-on: ubuntu-24.04-arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y wget make gcc libc6-dev
+
+      - name: Download and compile catdoc
+        run: |
+          # 这里使用一个备用的、可靠的源码地址
+          wget http://deb.debian.org/debian/pool/main/c/catdoc/catdoc_0.95.orig.tar.gz
+          tar -xzf catdoc_0.95.orig.tar.gz
+          cd catdoc-0.95
+          # 静态编译
+          ./configure LDFLAGS="-static"
+          make
+          # 将编译好的文件复制出来
+          cp catdoc word2x ${{ github.workspace }}/
+
+      - name: Upload ARM64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: catdoc-static-arm64
+          path: |
+            catdoc
+            word2x
+
+  # 方案二：在 X86 环境中交叉编译 ARM64（备用方案）
+  build-arm64-cross:
+    name: Build for ARM64 (Cross-compile)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cross-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu wget make
+
+      - name: Download and compile catdoc
+        run: |
+          wget http://deb.debian.org/debian/pool/main/c/catdoc/catdoc_0.95.orig.tar.gz
+          tar -xzf catdoc_0.95.orig.tar.gz
+          cd catdoc-0.95
+          # 指定使用交叉编译工具链，并静态编译
+          ./configure --host=aarch64-linux-gnu LDFLAGS="-static"
+          make
+          cp catdoc word2x ${{ github.workspace }}/
+
+      - name: Upload ARM64 binary (Cross)
+        uses: actions/upload-artifact@v4
+        with:
+          name: catdoc-static-arm64-cross
+          path: |
+            catdoc
+            word2x
